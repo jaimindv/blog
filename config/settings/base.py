@@ -46,6 +46,7 @@ DJANGO_APPS = [
 
 LOCAL_APPS = [
     "core.custom_auth",
+    "core.blog",
 ]
 
 THIRD_PARTY_APPS = [

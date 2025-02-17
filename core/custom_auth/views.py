@@ -81,10 +81,6 @@ class AppUserViewset(viewsets.ModelViewSet):
         }
         return Response(response_data, status=status.HTTP_200_OK)
 
-    def partial_update(self, request, *args, **kwargs):
-        kwargs["partial"] = True
-        return self.update(request, *args, **kwargs)
-
     @action(methods=["PUT"], detail=False, url_path="change-password")
     def change_password(self, request):
         serializer = self.get_serializer(data=request.data)

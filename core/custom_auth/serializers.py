@@ -39,7 +39,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
             "role",
             "profile_pic",
         ]
-        read_only_fields = ["uuid", "photo"]
+        read_only_fields = ["profile_pic"]
 
 
 class ChangePasswordSerializer(serializers.Serializer):

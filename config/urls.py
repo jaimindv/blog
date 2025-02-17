@@ -25,6 +25,7 @@ urlpatterns = [
         include(
             [
                 path("auth/", include("core.custom_auth.urls")),
+                path("blogs/", include("core.blog.urls")),
             ]
         ),
     ),
