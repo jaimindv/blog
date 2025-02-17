@@ -3,7 +3,7 @@ from rest_framework import serializers
 
 from core.custom_auth.models import User
 
-from .models import Blog, Category, Tag
+from .models import Blog, Category, Comment, Tag
 
 
 class AuthorSerializer(serializers.ModelSerializer):
@@ -73,10 +73,11 @@ class BlogCreateUpdateSerializer(serializers.ModelSerializer):
         return blog_instance
 
 
-class BlogDetailSerializer(serializers.ModelSerializer):
+class BlogListSerializer(serializers.ModelSerializer):
     author = AuthorSerializer()
     category = CategorySerializer()
     tags = TagSerializer(many=True)
+    comments_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Blog
@@ -89,20 +90,47 @@ class BlogDetailSerializer(serializers.ModelSerializer):
             "content",
             "category",
             "tags",
+            "comments_count",
+        ]
+
+    def get_comments_count(self, obj):
+        return obj.comments.count()
+
+
+class CommentSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Comment
+        fields = [
+            "id",
+            "blog",
+            "user",
+            "text",
+            "created_at",
+            "parent",
+            "upvoted_by",
+            "downvoted_by",
+            "upvote_count",
+            "downvote_count",
         ]
 
 
-# class CommentSerializer(serializers.ModelSerializer):
+class BlogDetailSerializer(serializers.ModelSerializer):
+    author = AuthorSerializer()
+    category = CategorySerializer()
+    tags = TagSerializer(many=True)
+    comments = CommentSerializer(many=True)
 
-#     class Meta:
-#         model = Comment
-#         fields = [
-#             "id",
-#             "blog",
-#             "user",
-#             "text",
-#             "created_at",
-#             "parent",
-#             "upvotes",
-#             "downvotes",
-#         ]
+    class Meta:
+        model = Blog
+        fields = [
+            "id",
+            "title",
+            "publication_date",
+            "is_published",
+            "author",
+            "content",
+            "category",
+            "tags",
+            "comments",
+        ]

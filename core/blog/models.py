@@ -36,24 +36,34 @@ class Blog(models.Model):
         return self.title
 
 
-# class Comment(models.Model):
-#     blog = models.ForeignKey(Blog, on_delete=models.CASCADE, related_name='comments')
-#     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='comments')
-#     text = models.TextField()
-#     created_at = models.DateTimeField(auto_now_add=True)
-#     parent = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='replies')
-#     upvoted_by = models.ManyToManyField(User, related_name='upvoted_comments', blank=True)
-#     downvoted_by = models.ManyToManyField(User, related_name='downvoted_comments', blank=True)
+class Comment(models.Model):
+    blog = models.ForeignKey(Blog, on_delete=models.CASCADE, related_name="comments")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="comments")
+    text = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    parent = models.ForeignKey(
+        "self", null=True, on_delete=models.CASCADE, related_name="replies"
+    )
+    upvoted_by = models.ManyToManyField(User, related_name="upvoted_comments")
+    downvoted_by = models.ManyToManyField(User, related_name="downvoted_comments")
 
-#     def upvote(self, user):
-#         if user in self.downvoted_by.all():
-#             self.downvoted_by.remove(user)
-#         self.upvoted_by.add(user)
+    @property
+    def upvote_count(self):
+        return self.upvoted_by.count()
 
-#     def downvote(self, user):
-#         if user in self.upvoted_by.all():
-#             self.upvoted_by.remove(user)
-#         self.downvoted_by.add(user)
+    @property
+    def downvote_count(self):
+        return self.downvoted_by.count()
 
-#     def __str__(self):
-#         return f'Comment by {self.user.email} on {self.blog.title}'
+    def upvote(self, user):
+        if user in self.downvoted_by.all():
+            self.downvoted_by.remove(user)
+        self.upvoted_by.add(user)
+
+    def downvote(self, user):
+        if user in self.upvoted_by.all():
+            self.upvoted_by.remove(user)
+        self.downvoted_by.add(user)
+
+    def __str__(self):
+        return f"Comment by {self.user.email} on {self.blog.title}"

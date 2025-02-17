@@ -191,3 +191,18 @@ SIMPLE_JWT = {
 API_KEY = env("API_KEY")
 
 PHONENUMBER_DEFAULT_REGION="IN"
+
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": "redis://127.0.0.1:6379/1",
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        },
+    }
+}
+
+
+
+# 5 minutes
+CACHED_TIMEOUT = 60 * 5
