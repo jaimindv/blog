@@ -4,8 +4,8 @@ from rest_framework.routers import DefaultRouter
 from .views import BlogViewSet, CommentViewSet
 
 router = DefaultRouter()
-router.register("", BlogViewSet, basename="blogs")
-router.register("comments/", CommentViewSet, basename="comments")
+router.register(r"comments", CommentViewSet, basename="comments")
+router.register(r"", BlogViewSet, basename="blogs")
 
 urlpatterns = [
     path("", include(router.urls)),

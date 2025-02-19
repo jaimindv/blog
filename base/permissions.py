@@ -42,6 +42,8 @@ class IsRoleAuthorOrAdmin(BasePermission):
     def has_permission(self, request, view):
         if request.user.is_staff:
             return True
+        if request.user.role == "Admin":
+            return True
         return request.user.role == "Author"
 
 
@@ -55,4 +57,22 @@ class IsRoleReaderOrAdmin(BasePermission):
     def has_permission(self, request, view):
         if request.user.is_staff:
             return True
+        if request.user.role == "Admin":
+            return True
         return request.user.role == "Reader"
+
+
+class IsOwnerOrAdmin(BasePermission):
+    """
+    Custom permission to only allow access to objects created by the requesting user.
+    """
+
+    message = {
+        "error": "You do not have permission to perform this action on another user's resource."
+    }
+
+    def has_object_permission(self, request, view, obj):
+        if request.user.role == "Admin":
+            return True
+        # Check if the requesting user is the creator of the object
+        return obj.user == request.user

@@ -115,6 +115,27 @@ class CommentSerializer(serializers.ModelSerializer):
         ]
 
 
+class CommentCreateUpdateSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Comment
+        fields = [
+            "id",
+            "blog",
+            "user",
+            "text",
+            "parent",
+        ]
+        extra_kwargs = {"user": {"required": False}}
+
+    def create(self, validated_data):
+        request = self.context.get("request")
+        user = request.user
+        validated_data.update({"user": user})
+        comment_instance = super().create(validated_data)
+        return comment_instance
+
+
 class BlogDetailSerializer(serializers.ModelSerializer):
     author = AuthorSerializer()
     category = CategorySerializer()
