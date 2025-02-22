@@ -31,6 +31,8 @@ SECRET_KEY = env("SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env("DEBUG")
 
+HOST_URL = env("HOST_URL")
+
 ALLOWED_HOSTS = []
 
 # Application definition
@@ -53,6 +55,7 @@ THIRD_PARTY_APPS = [
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",
     "phonenumber_field",
+    "drf_yasg",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + LOCAL_APPS + THIRD_PARTY_APPS
@@ -203,6 +206,11 @@ CACHES = {
 }
 
 
-
-# 5 minutes
-CACHED_TIMEOUT = 60 * 5
+SWAGGER_SETTINGS = {
+    "USE_SESSION_AUTH": False,
+    "api_version": "1",
+    "enabled_methods": ["get", "post", "put", "patch", "delete"],
+    "SECURITY_DEFINITIONS": {"basic": {"type": "basic"}},
+    "Schemes": ["http", "https"],
+    "DEFAULT_API_URL": f"{HOST_URL}/",
+}
