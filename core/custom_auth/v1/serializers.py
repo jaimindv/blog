@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import User
+from core.custom_auth.models import User
 
 
 class RegisterUserSerializer(serializers.ModelSerializer):

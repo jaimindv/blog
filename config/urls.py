@@ -6,7 +6,7 @@ from rest_framework import permissions
 
 schema_view = get_schema_view(
     openapi.Info(
-        title="Your API",
+        title="Blog API Documentation",
         default_version="v1",
         description="API documentation",
         terms_of_service="https://your-terms.com",
@@ -21,11 +21,11 @@ schema_view = get_schema_view(
 urlpatterns = [
     path("admin/", admin.site.urls),
     path(
-        "api/",
+        "api/v1/",
         include(
             [
-                path("auth/", include("core.custom_auth.urls")),
-                path("blogs/", include("core.blog.urls")),
+                path("auth/", include("core.custom_auth.v1.urls")),
+                path("blogs/", include("core.blog.v1.urls")),
             ]
         ),
     ),

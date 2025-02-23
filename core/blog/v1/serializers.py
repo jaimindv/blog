@@ -1,9 +1,8 @@
 from django.utils import timezone
 from rest_framework import serializers
 
+from core.blog.models import Blog, Category, Comment, Tag
 from core.custom_auth.models import User
-
-from .models import Blog, Category, Comment, Tag
 
 
 class AuthorSerializer(serializers.ModelSerializer):

@@ -9,8 +9,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from base.permissions import IsAPIKeyAuthenticated, IsOwnerOrAdmin, IsRoleAuthorOrAdmin
+from core.blog.models import Blog, Comment
 
-from .models import Blog, Comment
 from .serializers import (
     BlogCreateUpdateSerializer,
     BlogDetailSerializer,
