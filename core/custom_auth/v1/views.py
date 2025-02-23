@@ -8,6 +8,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from base.permissions import IsAPIKeyAuthenticated
 from core.custom_auth.models import User
+from core.custom_auth.throttles import FailedLoginThrottle
 
 from .serializers import (
     ChangePasswordSerializer,
@@ -152,6 +153,8 @@ class AppUserViewset(viewsets.ModelViewSet):
 class LoginView(views.APIView):
     authentication_classes = []
     permission_classes = [IsAPIKeyAuthenticated]
+    throttle_classes = [FailedLoginThrottle]
+    throttle_scope = "failed_login"
 
     @swagger_auto_schema(
         operation_description="Login API using email and password",
@@ -203,17 +206,11 @@ class LoginView(views.APIView):
         password = serializer.validated_data.get("password")
 
         if not User.objects.filter(email=email).exists():
-            return Response(
-                {
-                    "error": "Invalid email.",
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return self.failed_attempt(email, "Invalid email.")
 
         user = authenticate(request, email=email, password=password)
         if user:
             login(request, user, backend="core.custom_auth.backends.AppUserAuthBackend")
-            # JWT token
             refresh_token = RefreshToken.for_user(user)
             response = {
                 "message": "Login Successful.",
@@ -225,11 +222,21 @@ class LoginView(views.APIView):
             }
             return Response(data=response)
         else:
+            return self.failed_attempt(email, "Incorrect password.")
+
+    def failed_attempt(self, email, error_message):
+        """Apply throttling only when login fails."""
+        throttle = FailedLoginThrottle()
+        request = self.request
+
+        if throttle.allow_request(request, self):
             return Response(
-                {
-                    "error": "Incorrect password.",
-                },
-                status=status.HTTP_400_BAD_REQUEST,
+                {"error": error_message}, status=status.HTTP_400_BAD_REQUEST
+            )
+        else:
+            return Response(
+                {"error": "Too many failed login attempts. Try again later."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
 
 

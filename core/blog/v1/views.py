@@ -2,6 +2,7 @@ from django.core.cache import cache
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ParseError
 
 # from rest_framework.decorators import action
 from rest_framework.filters import OrderingFilter, SearchFilter
@@ -21,10 +22,10 @@ from .serializers import (
 
 
 class BlogViewSet(viewsets.ModelViewSet):
-    queryset = Blog.objects.all().order_by("id")
+    queryset = Blog.objects.all()
     serializer_class = BlogDetailSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter, SearchFilter]
-    filterset_fields = ["author", "category", "tags", "is_published"]
+    filterset_fields = ["author", "category", "is_published"]
     ordering_fields = ["id", "title"]
     search_fields = [
         "title",
@@ -36,23 +37,40 @@ class BlogViewSet(viewsets.ModelViewSet):
     ]
 
     def get_queryset(self):
+        queryset = self.queryset
+
+        # Skip caching if request contains filters or search parameters
+        if self.request.query_params:
+            cache_key = None
+        else:
+            cache_key = "blog_list"
+
+        # Return cached data if any
+        if cache_key:
+            cached_data = cache.get(cache_key)
+            if cached_data:
+                return cached_data
+
+        # Restrict access for non-admin users when modifying data
         if self.action in ["partial_update", "update", "destroy"]:
             user = self.request.user
             if user.role != "Admin" or not user.is_staff:
                 return Blog.objects.filter(author=user).order_by("id")
 
-        # Cache the queryset for better performance
-        cache_key = "blog_list"
-        cached_data = cache.get(cache_key)
+        # Handle tag filtering
+        tags = self.request.query_params.get("tags")
+        if tags:
+            try:
+                tag_list = [int(tag) for tag in tags.split(",")]
+                queryset = queryset.filter(tags__id__in=tag_list).distinct()
+            except ValueError:
+                raise ParseError({"error": "Invalid tag value. Tags must be integers."})
 
-        # Return cached data if any
-        if cached_data:
-            return cached_data
+        # Cache the queryset only if no request parameters are present
+        if cache_key:
+            cache.set(cache_key, queryset)
 
-        queryset = super().get_queryset()
-        # set cache data
-        cache.set(cache_key, queryset)
-        return queryset
+        return queryset.order_by("id")
 
     def get_permissions(self):
         # Only Author/Admins allowed to create/update/delete blogs
@@ -248,7 +266,7 @@ class CommentViewSet(viewsets.ModelViewSet):
         if (
             request.user.role == "Admin"
             or comment_instance.user == request.user
-            or comment_instance.blog.user == request.user
+            or comment_instance.blog.author == request.user
         ):
             comment_instance.delete()
             response_data = {
