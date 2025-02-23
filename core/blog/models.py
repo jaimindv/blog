@@ -65,5 +65,13 @@ class Comment(models.Model):
             self.upvoted_by.remove(user)
         self.downvoted_by.add(user)
 
+    def remove_upvote(self, user):
+        if user in self.upvoted_by.all():
+            self.upvoted_by.remove(user)
+
+    def remove_downvote(self, user):
+        if user in self.downvoted_by.all():
+            self.downvoted_by.remove(user)
+
     def __str__(self):
         return f"Comment by {self.user.email} on {self.blog.title}"

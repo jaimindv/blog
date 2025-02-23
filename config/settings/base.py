@@ -34,6 +34,7 @@ DEBUG = env("DEBUG")
 HOST_URL = env("HOST_URL")
 
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS")
+# ALLOWED_HOSTS = ["127.0.0.1", "0.0.0.0", "localhost"]
 
 # Application definition
 

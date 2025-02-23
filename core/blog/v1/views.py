@@ -167,7 +167,9 @@ class CommentViewSet(viewsets.ModelViewSet):
         serializer.save()
 
         # Clear cache as a new comment is added
-        cache.delete("comment_list")
+        blog_id = serializer.data.get("blog")
+        cache.delete("blog_list")
+        cache.delete(f"blog_{blog_id}")
 
         response_data = {
             "message": "Comment created successfully.",
@@ -183,8 +185,9 @@ class CommentViewSet(viewsets.ModelViewSet):
         serializer.save()
 
         # Clear cache
-        cache.delete(f"comment_{instance.id}")
-        cache.delete("comment_list")
+        blog_id = serializer.data.get("blog")
+        cache.delete("blog_list")
+        cache.delete(f"blog_{blog_id}")
 
         response_data = {
             "message": "Comment updated successfully.",
@@ -192,31 +195,55 @@ class CommentViewSet(viewsets.ModelViewSet):
         }
         return Response(response_data, status=status.HTTP_200_OK)
 
-    @action(detail=True, methods=["post"], url_path="reply")
-    def reply(self, request, pk=None):
-        parent_comment = self.get_object()
-        serializer = self.get_serializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save(
-                user=request.user, parent=parent_comment, blog=parent_comment.blog
-            )
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
     @action(detail=True, methods=["post"], url_path="upvote")
     def upvote(self, request, pk=None):
         comment = self.get_object()
         comment.upvote(request.user)
-        return Response({"status": "upvoted"})
+
+        # Clear cache
+        cache.delete("blog_list")
+        cache.delete(f"blog_{comment.blog.id}")
+
+        return Response({"message": "Comment upvoted."}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="remove-upvote")
+    def remove_upvote(self, request, pk=None):
+        comment = self.get_object()
+        comment.remove_upvote(request.user)
+
+        # Clear cache
+        cache.delete("blog_list")
+        cache.delete(f"blog_{comment.blog.id}")
+
+        return Response(
+            {"message": "Comment upvote removed."}, status=status.HTTP_200_OK
+        )
 
     @action(detail=True, methods=["post"], url_path="downvote")
     def downvote(self, request, pk=None):
         comment = self.get_object()
         comment.downvote(request.user)
-        return Response({"status": "downvoted"})
+
+        # Clear cache
+        cache.delete("blog_list")
+        cache.delete(f"blog_{comment.blog.id}")
+
+        return Response({"message": "Comment downvoted."}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="remove-downvote")
+    def remove_downvote(self, request, pk=None):
+        comment = self.get_object()
+        comment.remove_downvote(request.user)
+
+        # Clear cache
+        cache.delete("blog_list")
+        cache.delete(f"blog_{comment.blog.id}")
+
+        return Response(
+            {"message": "Comment downvote removed."}, status=status.HTTP_200_OK
+        )
 
     def destroy(self, request, *args, **kwargs):
-        comment_id = kwargs.get("pk")
         comment_instance = self.get_object()
         if (
             request.user.role == "Admin"
@@ -229,8 +256,8 @@ class CommentViewSet(viewsets.ModelViewSet):
             }
 
             # Clear cache
-            cache.delete(f"comment_{comment_id}")
-            cache.delete("comment_list")
+            cache.delete(f"blog_{comment_instance.blog.id}")
+            cache.delete("blog_list")
 
             return Response(response_data, status=status.HTTP_204_NO_CONTENT)
         return Response(
