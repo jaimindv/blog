@@ -34,6 +34,7 @@ DEBUG = env("DEBUG")
 HOST_URL = env("HOST_URL")
 
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS")
+# ALLOWED_HOSTS = ["127.0.0.1", "0.0.0.0", "localhost"]
 
 # Application definition
 
@@ -56,6 +57,7 @@ THIRD_PARTY_APPS = [
     "rest_framework_simplejwt.token_blacklist",
     "phonenumber_field",
     "drf_yasg",
+    "drf_api_logger",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + LOCAL_APPS + THIRD_PARTY_APPS
@@ -68,6 +70,9 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+
+    #For API Logging
+    'drf_api_logger.middleware.api_logger_middleware.APILoggerMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -166,6 +171,9 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_PAGINATION_CLASS": "base.paginator.BasePagination",
     "PAGE_SIZE": 10,
+    'DEFAULT_THROTTLE_RATES': {
+        'failed_login': '5/hour',
+    }
 }
 
 SIMPLE_JWT = {
@@ -205,12 +213,26 @@ CACHES = {
     }
 }
 
-
 SWAGGER_SETTINGS = {
     "USE_SESSION_AUTH": False,
     "api_version": "1",
     "enabled_methods": ["get", "post", "put", "patch", "delete"],
-    "SECURITY_DEFINITIONS": {"basic": {"type": "basic"}},
+    "SECURITY_DEFINITIONS": {
+        "API Key": {  
+            "type": "apiKey",
+            "name": "API-KEY",
+            "in": "header",
+        },
+        "JWT": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header",
+            "description": "Enter JWT token as: Bearer <your_token>",
+        },
+    },
     "Schemes": ["http", "https"],
     "DEFAULT_API_URL": f"{HOST_URL}/",
 }
+
+# logging
+DRF_API_LOGGER_DATABASE = True

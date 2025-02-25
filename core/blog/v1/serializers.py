@@ -1,12 +1,11 @@
 from django.utils import timezone
 from rest_framework import serializers
 
+from core.blog.models import Blog, Category, Comment, Tag
 from core.custom_auth.models import User
 
-from .models import Blog, Category, Comment, Tag
 
-
-class AuthorSerializer(serializers.ModelSerializer):
+class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
@@ -74,7 +73,7 @@ class BlogCreateUpdateSerializer(serializers.ModelSerializer):
 
 
 class BlogListSerializer(serializers.ModelSerializer):
-    author = AuthorSerializer()
+    author = UserSerializer()
     category = CategorySerializer()
     tags = TagSerializer(many=True)
     comments_count = serializers.SerializerMethodField()
@@ -98,6 +97,8 @@ class BlogListSerializer(serializers.ModelSerializer):
 
 
 class CommentSerializer(serializers.ModelSerializer):
+    upvoted_by = UserSerializer(many=True)
+    downvoted_by = UserSerializer(many=True)
 
     class Meta:
         model = Comment
@@ -122,11 +123,9 @@ class CommentCreateUpdateSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "blog",
-            "user",
             "text",
             "parent",
         ]
-        extra_kwargs = {"user": {"required": False}}
 
     def create(self, validated_data):
         request = self.context.get("request")
@@ -137,7 +136,7 @@ class CommentCreateUpdateSerializer(serializers.ModelSerializer):
 
 
 class BlogDetailSerializer(serializers.ModelSerializer):
-    author = AuthorSerializer()
+    author = UserSerializer()
     category = CategorySerializer()
     tags = TagSerializer(many=True)
     comments = CommentSerializer(many=True)

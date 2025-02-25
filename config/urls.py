@@ -1,3 +1,5 @@
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 from drf_yasg import openapi
@@ -6,7 +8,7 @@ from rest_framework import permissions
 
 schema_view = get_schema_view(
     openapi.Info(
-        title="Your API",
+        title="Blog API Documentation",
         default_version="v1",
         description="API documentation",
         terms_of_service="https://your-terms.com",
@@ -17,21 +19,8 @@ schema_view = get_schema_view(
     permission_classes=(permissions.AllowAny,),
 )
 
-
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path(
-        "api/",
-        include(
-            [
-                path("auth/", include("core.custom_auth.urls")),
-                path("blogs/", include("core.blog.urls")),
-            ]
-        ),
-    ),
-]
-
-urlpatterns += [
     path(
         "swagger<format>/", schema_view.without_ui(cache_timeout=0), name="schema-json"
     ),
@@ -41,4 +30,17 @@ urlpatterns += [
         name="schema-swagger-ui",
     ),
     path("redoc/", schema_view.with_ui("redoc", cache_timeout=0), name="schema-redoc"),
+    path(
+        "api/v1/",
+        include(
+            [
+                path("auth/", include("core.custom_auth.v1.urls")),
+                path("blogs/", include("core.blog.v1.urls")),
+            ]
+        ),
+    ),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

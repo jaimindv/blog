@@ -2,6 +2,7 @@ from django.core.cache import cache
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ParseError
 
 # from rest_framework.decorators import action
 from rest_framework.filters import OrderingFilter, SearchFilter
@@ -9,8 +10,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from base.permissions import IsAPIKeyAuthenticated, IsOwnerOrAdmin, IsRoleAuthorOrAdmin
+from core.blog.models import Blog, Comment
 
-from .models import Blog, Comment
 from .serializers import (
     BlogCreateUpdateSerializer,
     BlogDetailSerializer,
@@ -21,10 +22,10 @@ from .serializers import (
 
 
 class BlogViewSet(viewsets.ModelViewSet):
-    queryset = Blog.objects.all().order_by("id")
+    queryset = Blog.objects.all()
     serializer_class = BlogDetailSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter, SearchFilter]
-    filterset_fields = ["author", "category", "tags", "is_published"]
+    filterset_fields = ["author", "category", "is_published"]
     ordering_fields = ["id", "title"]
     search_fields = [
         "title",
@@ -36,23 +37,40 @@ class BlogViewSet(viewsets.ModelViewSet):
     ]
 
     def get_queryset(self):
+        queryset = self.queryset
+
+        # Skip caching if request contains filters or search parameters
+        if self.request.query_params:
+            cache_key = None
+        else:
+            cache_key = "blog_list"
+
+        # Return cached data if any
+        if cache_key:
+            cached_data = cache.get(cache_key)
+            if cached_data:
+                return cached_data
+
+        # Restrict access for non-admin users when modifying data
         if self.action in ["partial_update", "update", "destroy"]:
             user = self.request.user
             if user.role != "Admin" or not user.is_staff:
                 return Blog.objects.filter(author=user).order_by("id")
 
-        # Cache the queryset for better performance
-        cache_key = "blog_list"
-        cached_data = cache.get(cache_key)
+        # Handle tag filtering
+        tags = self.request.query_params.get("tags")
+        if tags:
+            try:
+                tag_list = [int(tag) for tag in tags.split(",")]
+                queryset = queryset.filter(tags__id__in=tag_list).distinct()
+            except ValueError:
+                raise ParseError({"error": "Invalid tag value. Tags must be integers."})
 
-        # Return cached data if any
-        if cached_data:
-            return cached_data
+        # Cache the queryset only if no request parameters are present
+        if cache_key:
+            cache.set(cache_key, queryset)
 
-        queryset = super().get_queryset()
-        # set cache data
-        cache.set(cache_key, queryset)
-        return queryset
+        return queryset.order_by("id")
 
     def get_permissions(self):
         # Only Author/Admins allowed to create/update/delete blogs
@@ -167,7 +185,9 @@ class CommentViewSet(viewsets.ModelViewSet):
         serializer.save()
 
         # Clear cache as a new comment is added
-        cache.delete("comment_list")
+        blog_id = serializer.data.get("blog")
+        cache.delete("blog_list")
+        cache.delete(f"blog_{blog_id}")
 
         response_data = {
             "message": "Comment created successfully.",
@@ -183,8 +203,9 @@ class CommentViewSet(viewsets.ModelViewSet):
         serializer.save()
 
         # Clear cache
-        cache.delete(f"comment_{instance.id}")
-        cache.delete("comment_list")
+        blog_id = serializer.data.get("blog")
+        cache.delete("blog_list")
+        cache.delete(f"blog_{blog_id}")
 
         response_data = {
             "message": "Comment updated successfully.",
@@ -192,36 +213,60 @@ class CommentViewSet(viewsets.ModelViewSet):
         }
         return Response(response_data, status=status.HTTP_200_OK)
 
-    @action(detail=True, methods=["post"], url_path="reply")
-    def reply(self, request, pk=None):
-        parent_comment = self.get_object()
-        serializer = self.get_serializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save(
-                user=request.user, parent=parent_comment, blog=parent_comment.blog
-            )
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
     @action(detail=True, methods=["post"], url_path="upvote")
     def upvote(self, request, pk=None):
         comment = self.get_object()
         comment.upvote(request.user)
-        return Response({"status": "upvoted"})
+
+        # Clear cache
+        cache.delete("blog_list")
+        cache.delete(f"blog_{comment.blog.id}")
+
+        return Response({"message": "Comment upvoted."}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="remove-upvote")
+    def remove_upvote(self, request, pk=None):
+        comment = self.get_object()
+        comment.remove_upvote(request.user)
+
+        # Clear cache
+        cache.delete("blog_list")
+        cache.delete(f"blog_{comment.blog.id}")
+
+        return Response(
+            {"message": "Comment upvote removed."}, status=status.HTTP_200_OK
+        )
 
     @action(detail=True, methods=["post"], url_path="downvote")
     def downvote(self, request, pk=None):
         comment = self.get_object()
         comment.downvote(request.user)
-        return Response({"status": "downvoted"})
+
+        # Clear cache
+        cache.delete("blog_list")
+        cache.delete(f"blog_{comment.blog.id}")
+
+        return Response({"message": "Comment downvoted."}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="remove-downvote")
+    def remove_downvote(self, request, pk=None):
+        comment = self.get_object()
+        comment.remove_downvote(request.user)
+
+        # Clear cache
+        cache.delete("blog_list")
+        cache.delete(f"blog_{comment.blog.id}")
+
+        return Response(
+            {"message": "Comment downvote removed."}, status=status.HTTP_200_OK
+        )
 
     def destroy(self, request, *args, **kwargs):
-        comment_id = kwargs.get("pk")
         comment_instance = self.get_object()
         if (
             request.user.role == "Admin"
             or comment_instance.user == request.user
-            or comment_instance.blog.user == request.user
+            or comment_instance.blog.author == request.user
         ):
             comment_instance.delete()
             response_data = {
@@ -229,8 +274,8 @@ class CommentViewSet(viewsets.ModelViewSet):
             }
 
             # Clear cache
-            cache.delete(f"comment_{comment_id}")
-            cache.delete("comment_list")
+            cache.delete(f"blog_{comment_instance.blog.id}")
+            cache.delete("blog_list")
 
             return Response(response_data, status=status.HTTP_204_NO_CONTENT)
         return Response(

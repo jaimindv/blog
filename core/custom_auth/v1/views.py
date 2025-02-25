@@ -1,12 +1,15 @@
 from django.contrib.auth import authenticate, login, logout
+from drf_yasg import openapi
+from drf_yasg.utils import swagger_auto_schema
 from rest_framework import status, views, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from base.permissions import IsAPIKeyAuthenticated
+from core.custom_auth.models import User
+from core.custom_auth.throttles import FailedLoginThrottle
 
-from .models import User
 from .serializers import (
     ChangePasswordSerializer,
     LoginSerializer,
@@ -81,6 +84,33 @@ class AppUserViewset(viewsets.ModelViewSet):
         }
         return Response(response_data, status=status.HTTP_200_OK)
 
+    @swagger_auto_schema(
+        responses={
+            200: openapi.Response(
+                description="Password updated successfully",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        "message": openapi.Schema(
+                            type=openapi.TYPE_STRING,
+                            example="Password updated successfully.",
+                        ),
+                    },
+                ),
+            ),
+            400: openapi.Response(
+                description="Invalid request",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        "error": openapi.Schema(
+                            type=openapi.TYPE_STRING, example="Invalid old password."
+                        ),
+                    },
+                ),
+            ),
+        },
+    )
     @action(methods=["PUT"], detail=False, url_path="change-password")
     def change_password(self, request):
         serializer = self.get_serializer(data=request.data)
@@ -123,7 +153,52 @@ class AppUserViewset(viewsets.ModelViewSet):
 class LoginView(views.APIView):
     authentication_classes = []
     permission_classes = [IsAPIKeyAuthenticated]
+    throttle_classes = [FailedLoginThrottle]
+    throttle_scope = "failed_login"
 
+    @swagger_auto_schema(
+        operation_description="Login API using email and password",
+        request_body=LoginSerializer,
+        responses={
+            200: openapi.Response(
+                description="Login Successful",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        "message": openapi.Schema(
+                            type=openapi.TYPE_STRING, example="Login Successful"
+                        ),
+                        "user_id": openapi.Schema(type=openapi.TYPE_INTEGER, example=1),
+                        "email": openapi.Schema(
+                            type=openapi.TYPE_STRING, example="user@example.com"
+                        ),
+                        "role": openapi.Schema(
+                            type=openapi.TYPE_STRING, example="admin"
+                        ),
+                        "refresh_token": openapi.Schema(
+                            type=openapi.TYPE_STRING,
+                            example="eyJhbGciOiJIUzI1NiIsIn...",
+                        ),
+                        "access_token": openapi.Schema(
+                            type=openapi.TYPE_STRING,
+                            example="eyJhbGciOiJIUzI1NiIsIn...",
+                        ),
+                    },
+                ),
+            ),
+            400: openapi.Response(
+                description="Invalid email or password",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        "error": openapi.Schema(
+                            type=openapi.TYPE_STRING, example="Invalid email."
+                        ),
+                    },
+                ),
+            ),
+        },
+    )
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -131,20 +206,14 @@ class LoginView(views.APIView):
         password = serializer.validated_data.get("password")
 
         if not User.objects.filter(email=email).exists():
-            return Response(
-                {
-                    "error": "Invalid email.",
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return self.failed_attempt(email, "Invalid email.")
 
         user = authenticate(request, email=email, password=password)
         if user:
             login(request, user, backend="core.custom_auth.backends.AppUserAuthBackend")
-            # JWT token
             refresh_token = RefreshToken.for_user(user)
             response = {
-                "message": "Login Successfully",
+                "message": "Login Successful.",
                 "user_id": user.id,
                 "email": user.email,
                 "role": user.role,
@@ -153,16 +222,62 @@ class LoginView(views.APIView):
             }
             return Response(data=response)
         else:
+            return self.failed_attempt(email, "Incorrect password.")
+
+    def failed_attempt(self, email, error_message):
+        """Apply throttling only when login fails."""
+        throttle = FailedLoginThrottle()
+        request = self.request
+
+        if throttle.allow_request(request, self):
             return Response(
-                {
-                    "error": "Incorrect password.",
-                },
-                status=status.HTTP_400_BAD_REQUEST,
+                {"error": error_message}, status=status.HTTP_400_BAD_REQUEST
+            )
+        else:
+            return Response(
+                {"error": "Too many failed login attempts. Try again later."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
 
 
 class LogoutView(views.APIView):
 
+    @swagger_auto_schema(
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                "refresh_token": openapi.Schema(
+                    type=openapi.TYPE_STRING, description="JWT Refresh Token"
+                )
+            },
+            required=["refresh_token"],
+        ),
+        responses={
+            200: openapi.Response(
+                description="Logout Successful",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        "message": openapi.Schema(
+                            type=openapi.TYPE_STRING, example="Logout successful."
+                        ),
+                    },
+                ),
+            ),
+            400: openapi.Response(
+                description="Invalid or already Blacklisted Refresh token.",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        "error": openapi.Schema(
+                            type=openapi.TYPE_STRING,
+                            example="Invalid or already Blacklisted Refresh token.",
+                        ),
+                    },
+                ),
+            ),
+        },
+    )
     def post(self, request):
         try:
             refresh_token = request.data.get("refresh_token")
